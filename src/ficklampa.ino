@@ -3,6 +3,8 @@
 #include <AsyncMqttClient.h>
 #include <ESPAsyncTCP.h>
 #include <Hash.h>
+#include <ESP8266mDNS.h>
+
 
 AsyncWebServer webServer(80);
 AsyncMqttClient mqttClient;
@@ -50,16 +52,33 @@ void setup() {
 
     webServer.begin();
 
-    mqttClient.onConnect(onMqttConnect);
-    // mqttClient.onDisconnect(onMqttDisconnect);
-    // mqttClient.onSubscribe(onMqttSubscribe);
-    // mqttClient.onUnsubscribe(onMqttUnsubscribe);
-    mqttClient.onMessage(onMqttMessage);
-    // mqttClient.onPublish(onMqttPublish);
-    mqttClient.setServer(IPAddress(192, 168, 0, 36), 1883);
-    mqttClient.setKeepAlive(5).setCleanSession(false).setClientId("ficklampa");
-    Serial.println("Connecting to MQTT...");
-    mqttClient.connect();
+    // find rpi server by mDNS
+    if (!MDNS.begin("ESP")) {
+      Serial.println("Error setting up mDNS");
+    }
+    Serial.println("mDNS setup finished");
+
+    Serial.println("Sending mDNS Query");
+    int n = MDNS.queryService("mqtt", "tcp");
+
+    if (n == 0) {
+      Serial.println("No MQTT service found");
+    }
+    else {
+      Serial.println("MQTT service found:");
+      Serial.print("  host " + String(MDNS.hostname(0)));
+      Serial.print(" ip " );
+      Serial.print(MDNS.IP(0));
+      Serial.println(":" + String(MDNS.port(0)));
+
+      // connect to the discovered mqtt broker
+      mqttClient.onConnect(onMqttConnect);
+      mqttClient.onMessage(onMqttMessage);
+      mqttClient.setServer(MDNS.IP(0), MDNS.port(0));
+      mqttClient.setKeepAlive(5).setCleanSession(false).setClientId("ficklampa");
+      Serial.println("Connecting to MQTT...");
+      mqttClient.connect();
+    }
   }
 }
 
